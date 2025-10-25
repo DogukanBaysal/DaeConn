@@ -1,0 +1,40 @@
+services:
+  db:
+    image: postgres:16
+    container_name: pg_ips
+    environment:
+      POSTGRES_DB: ips
+      POSTGRES_USER: ipsuser
+      POSTGRES_PASSWORD: ipspass
+    ports: ["5432:5432"]
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ipsuser -d ips"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  app:
+    build: .
+    container_name: ip_app
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql://ipsuser:ipspass@db:5432/ips
+      APP_DATA_DIR: /app                # <- base path inside container
+    command: ["python", "main.py"]
+    volumes:
+      # DO NOT mount /app (code stays in image)
+      - type: bind
+        source: "${PWD}/targets"
+        target: /app/targets
+      - type: bind
+        source: "${PWD}/state"
+        target: /app/state
+      - type: bind
+        source: "${PWD}/exports"
+        target: /app/exports
+volumes:
+  pgdata:
