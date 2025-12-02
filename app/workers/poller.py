@@ -31,10 +31,6 @@ STALE_AFTER = int(os.getenv("POLL_STALE_AFTER_HOURS", "2"))
 T = TypeVar("T")
 
 def map_targets_to_rows(rows: list[IpList]) -> Dict[Tuple[str, int], List[IpList]]:
-    """
-    (dest_ip, dest_port) -> list of IpList rows
-    Keeps all rows, not just unique ones.
-    """
     m: Dict[Tuple[str, int], List[IpList]] = defaultdict(list)
     for r in rows:
         if r.destination_ip and r.destination_port:
@@ -60,7 +56,6 @@ def save_last_id(path: str, last_id: int) -> None:
 
 
 def tcp_connect_ok(ip: str, port: int, timeout: float) -> bool:
-    """Returns True if TCP connect succeeds; False otherwise."""
     try:
         with socket.create_connection((ip, port), timeout=timeout):
             return True
@@ -69,31 +64,24 @@ def tcp_connect_ok(ip: str, port: int, timeout: float) -> bool:
 
 
 def needs_probe(existing: Optional[CheckedIp], stale_after_hours: int) -> bool:
-    """True if no record or timestamp older than threshold."""
     if existing is None or existing.timestamp is None:
         return True
     now = datetime.now(timezone.utc)
     return existing.timestamp < (now - timedelta(hours=stale_after_hours))
 
 def process_item(ip: str, port: int, row_ctx: IpList) -> Tuple[str, int, bool]:
-    """
-    Handles one (ip, port):
-    - If existing entry is fresh (< 2h old): no probe, cache=True.
-    - If stale or missing: probe, update checked_ips, cache=False.
-    Always records a scanned_ips row documenting the event.
-    """
     with SessionLocal() as db:
         existing = get_node_if_exists(db, ip=ip, port=port)
         now = datetime.now(timezone.utc)
 
-        # Case 1: existing and fresh → no probe, record cache=True
+        # existing and fresh → no probe, record cache=True
         if existing and not needs_probe(existing, STALE_AFTER):
             status = existing.status
             add_scan_from_iplist_row(db, row=row_ctx, status=status, scan_timestamp=now, cache=True)
             db.commit()
             return (ip, port, status == "active")
 
-        # Case 2: new or stale → probe
+        # new or stale → probe
         ok = tcp_connect_ok(ip, port, CONNECT_TIMEOUT)
         status = "active" if ok else "inactive"
 
@@ -109,7 +97,7 @@ def process_item(ip: str, port: int, row_ctx: IpList) -> Tuple[str, int, bool]:
 
 
 def chunked(items: Iterable[T], size: int) -> Iterable[List[T]]:
-    seq = list(items)  # ensure slicing works even if a dict/iterator was passed
+    seq = list(items)  
     for i in range(0, len(seq), size):
         yield seq[i:i + size]
 
@@ -125,14 +113,11 @@ def unique_ip_port(rows: List[IpList]) -> List[Tuple[str, int]]:
                 out.append(key)
     return out
 
-# -----------------------------
-# Main poll logic
-# -----------------------------
 
 def poll_once() -> None:
     last_id = load_last_id(STATE_FILE)
 
-    # 1) Fetch new ip_list entries
+    # Fetch new ip_list entries
     with SessionLocal() as db:
         rows = get_ip_list_after_id(db, last_id=last_id, limit=MAX_FETCH)
 
@@ -142,12 +127,10 @@ def poll_once() -> None:
 
     new_max_id = max(r.id for r in rows)
 
-    # {(ip, port): [IpList, ...]}
     targets_map = map_targets_to_rows(rows)
     unique_targets = len(targets_map)
     total_entries = sum(len(v) for v in targets_map.values())
 
-    # Flatten to a per-row job list: List[Tuple[str, int, IpList]]
     jobs: List[Tuple[str, int, IpList]] = [
         (ip, port, row)
         for (ip, port), row_list in targets_map.items()
@@ -162,9 +145,7 @@ def poll_once() -> None:
     total_ok = 0
     total_fail = 0
 
-    # 2) Submit per-row tasks (so duplicates are kept)
     with ThreadPoolExecutor(max_workers=MAX_WORKERS) as pool:
-        # submit in bounded batches to limit memory/FD pressure
         for jobs_batch in chunked(jobs, BATCH_SIZE):
             futures = [pool.submit(process_item, ip, port, row_ctx)
                        for (ip, port, row_ctx) in jobs_batch]
@@ -187,7 +168,7 @@ def poll_once() -> None:
     save_last_id(STATE_FILE, new_max_id)
 
 def main():
-    interval = int(os.getenv("POLL_INTERVAL_SECONDS", "20"))  # default: 20s
+    interval = int(os.getenv("POLL_INTERVAL_SECONDS", "20")) 
 
     print(f"[poller] Starting continuous polling every {interval} seconds…")
 

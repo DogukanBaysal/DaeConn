@@ -4,18 +4,41 @@ import base64, hashlib, socket, struct, sys, time
 from datetime import datetime
 from typing import Dict, Generator, List, Optional, Tuple
 import os
+from dotenv import load_dotenv
 
-#MAGIC = os.getenv("MAGIC")
-#DEFAULT_PORT = int(os.getenv("PORT"))
-MAGIC = 0xC0C0C0C0               # Dogecoin mainnet
-DEFAULT_PORT = 22556
+load_dotenv()
+
+def load_magic():
+    raw = os.getenv("MAGIC")
+    if raw is None:
+        raise ValueError("MAGIC not found in .env")
+
+    raw = raw.lower().replace("0x", "")
+
+    b = bytes.fromhex(raw)
+
+    magic_int = int.from_bytes(b, "little")
+
+    return magic_int
+
+
+def load_port():
+    port_raw = os.getenv("PORT")
+    if port_raw is None:
+        raise ValueError("PORT not found in .env")
+    return int(port_raw)
+
+MAGIC = load_magic()
+DEFAULT_PORT = load_port()
+        
+
+DEFAULT_PORT = load_port()
 SOCKET_TIMEOUT = 15
 READ_CHUNK = 65536
-IDLE_AFTER_FIRST = 20
+IDLE_AFTER_FIRST = 40
 HARD_CAP_SECONDS = 90
 PING_INTERVAL = 20
 
-# Service flags & BIP155 nets
 SERVICE_FLAGS = {
     1: "NODE_NETWORK",
     2: "NODE_GETUTXO",
@@ -34,7 +57,6 @@ NETWORK_NAMES = {
     NET_CJDNS: "CJDNS",
 }
 
-# -------------------- Helpers --------------------
 def decode_services(services: int) -> List[str]:
     return [n for f, n in SERVICE_FLAGS.items() if services & f] or ["NONE"]
 
@@ -61,9 +83,9 @@ def build_msg(cmd: str, payload: bytes) -> bytes:
     return header + payload
 
 def build_version_payload() -> bytes:
-    version= 70015; services = 0; ts = int(time.time())
+    version= 70016; services = 0; ts = int(time.time())
     nonce = int.from_bytes(sha256d(str(ts).encode())[:8], "little")
-    ua = b"/doge-live-extractor:1.1/"
+    ua = b"/connector/"
     payload  = struct.pack("<iQq", version, services, ts)
     payload += struct.pack("<Q", services) + ip6_from_ipv4("0.0.0.0") + struct.pack(">H", DEFAULT_PORT)
     payload += struct.pack("<Q", services) + ip6_from_ipv4("0.0.0.0") + struct.pack(">H", 0)
@@ -75,7 +97,7 @@ def build_version_payload() -> bytes:
 def build_ping_payload(nonce: int) -> bytes:
     return struct.pack("<Q", nonce)
 
-# -------------------- Framer --------------------
+
 def messages_from_stream(buf: bytearray) -> Generator[Tuple[str, bytes], None, None]:
     pos = 0
     while True:
@@ -97,12 +119,8 @@ def messages_from_stream(buf: bytearray) -> Generator[Tuple[str, bytes], None, N
         pos = end
     if pos: del buf[:pos]
 
-# -------------------- Decoders (now return last_seen) --------------------
+
 def decode_addr(payload: bytes) -> List[Dict]:
-    """
-    Return entries with fields: last_seen, services, services_decoded, network, ip, port
-    (last_seen is the raw payload timestamp; no ISO conversion)
-    """
     out: List[Dict] = []
     mv = memoryview(payload); off = 0
     count, off = read_compact_size(mv, off)
@@ -165,7 +183,6 @@ def decode_addrv2(payload: bytes) -> List[Dict]:
         })
     return out
 
-# -------------------- Client --------------------
 class DogeLiveScanner:
     def __init__(self, host: str, port: int = DEFAULT_PORT):
         self.host, self.port = host, port
@@ -222,15 +239,14 @@ class DogeLiveScanner:
         self._send("getaddr", b"")
 
     def _augment_rows(self, parsed: List[Dict]) -> List[Dict]:
-        """Map decoder output to requested schema with receive-time timestamp, src/dst fields."""
         recv_ts = int(time.time())
         recv_iso = datetime.now().astimezone().isoformat()
         rows = []
         for p in parsed:
             rows.append({
-                "timestamp": recv_ts,               # receive time (UNIX)
-                "time": recv_iso,                   # receive time (ISO)
-                "last_seen": p["last_seen"],        # raw payload ts
+                "timestamp": recv_ts,               
+                "time": recv_iso,                  
+                "last_seen": p["last_seen"],       
                 "services": p["services"],
                 "services_decoded": p["services_decoded"],
                 "network": p["network"],
@@ -280,7 +296,6 @@ class DogeLiveScanner:
         except Exception: pass
         self.sock = None
 
-# -------------------- Public API --------------------
 def scan_peer(host: str, port: int = DEFAULT_PORT) -> Optional[List[Dict]]:
     cli = DogeLiveScanner(host, port)
     if not cli.connect(): return None
@@ -288,7 +303,6 @@ def scan_peer(host: str, port: int = DEFAULT_PORT) -> Optional[List[Dict]]:
     cli.handshake()
     return cli.run()
 
-# -------------------- CLI --------------------
 if __name__ == "__main__":
     host = sys.argv[1] if len(sys.argv) > 1 else "185.252.234.250"
     port = int(sys.argv[2]) if len(sys.argv) > 2 else DEFAULT_PORT
@@ -297,6 +311,5 @@ if __name__ == "__main__":
         print("[-] No peers found.")
     else:
         print(f"[+] Rows: {len(rows)}")
-        # quick preview
         for r in rows[:5]:
             print(r)

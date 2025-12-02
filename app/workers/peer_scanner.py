@@ -10,7 +10,6 @@ from ipaddress import ip_address
 from datetime import datetime, timezone
 
 from dotenv import load_dotenv
-load_dotenv()
 
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.orm import Session
@@ -23,11 +22,15 @@ from network.scanner import scan_peer
 import logging
 import os
 import threading
+import csv
 
+
+load_dotenv()
 
 LOG_LEVEL = os.getenv("SCAN_LOG_LEVEL", "INFO").upper()
 logging.basicConfig(level=LOG_LEVEL, format="%(asctime)s %(levelname)s [%(threadName)s] %(message)s")
 logger = logging.getLogger("scanner")
+ACTIVE_IPS_CSV = os.getenv("ACTIVE_IPS_CSV", "exports/active_checked_ips.csv")
 
 
 IPS_FILE = os.getenv("SCAN_IPS_FILE", "state/peers.txt")
@@ -96,12 +99,6 @@ def unique_targets_from_file_and_db(db: Session) -> List[Tuple[str, int]]:
 
 
 def _parse_time_fields(item: Dict[str, Any]) -> Dict[str, Any]:
-    """
-    ip_list.timestamp expects TIMESTAMPTZ. Input may have:
-      - 'time': ISO8601 string
-      - 'timestamp': unix seconds (int)
-    Prefer 'time' if present, else parse 'timestamp' epoch.
-    """
     ts_dt: Optional[datetime] = None
     if "time" in item and item["time"]:
         try:
@@ -137,10 +134,6 @@ def _services_decoded_to_text(val: Any) -> Optional[str]:
 
 
 def normalize_scan_result(item: Dict[str, Any]) -> Dict[str, Any]:
-    """
-    Map scan_peers() dict to IpList insert row.
-    Expected keys in item: see user's example.
-    """
     times = _parse_time_fields(item)
     return {
         "timestamp": times["timestamp"],
@@ -157,10 +150,6 @@ def normalize_scan_result(item: Dict[str, Any]) -> Dict[str, Any]:
 
 
 def bulk_insert_ip_list(db: Session, rows: List[Dict[str, Any]]) -> int:
-    """
-    Bulk insert into ip_list using PostgreSQL 'INSERT ... RETURNING'.
-    Returns number of inserted rows.
-    """
     if not rows:
         return 0
     total = 0
@@ -180,7 +169,6 @@ def scan_one_peer(ip: str, port: int) -> list[dict]:
     if not out:
         logger.debug("%s:%s -> no data", ip, port)
         return []
-    # log a short summary of returned rows (but avoid logging the whole row list if large)
     if isinstance(out, list):
         # logger.info("%s:%s -> scanned, returned %d item(s)", ip, port, len(out))
         return out
@@ -192,9 +180,7 @@ def process_batch(targets: list[tuple[str, int]]) -> list[dict]:
     # logger.info("Processing batch of %d targets", len(targets))
     for ip, port in targets:
         results_from_peer = scan_one_peer(ip, port)
-        # if you want to inspect decoded peers individually:
         for r in results_from_peer:
-            # show destination ip/port & maybe services/last_seen
             dst = r.get("destination_ip"), r.get("destination_port")
             # logger.debug("-> decoded from %s:%s -> dest=%s last_seen=%s services=%s",
             #              ip, port, dst, r.get("last_seen"), r.get("services_decoded"))
@@ -234,8 +220,55 @@ def _worker_scan_and_insert(t_batch: List[Any]) -> Tuple[int, int]:
         return (0, len(to_insert))
 
 
+def export_active_checked_ips_to_csv() -> None:
+    export_time = datetime.now(timezone.utc).isoformat()
+
+    with SessionLocal() as db:
+        rows = get_active_checked_ips(db, limit=CHECKED_ACTIVE_LIMIT)
+
+    if not rows:
+        logger.info("[active-export] No active checked IPs to export.")
+        return
+
+    path = Path(ACTIVE_IPS_CSV)
+    path.parent.mkdir(parents=True, exist_ok=True)
+
+    file_exists = path.exists()
+
+    # append mode
+    with path.open("a", newline="", encoding="utf-8") as f:
+        writer = csv.writer(f)
+
+        # Write header only if file does not exist
+        if not file_exists:
+            writer.writerow([
+                "export_time",
+                "ip",
+                "port",
+                "status",
+                "timestamp"
+            ])
+
+        # Append rows
+        for r in rows:
+            ip = str(getattr(r, "ip", None))
+            port = getattr(r, "port", None)
+            status = getattr(r, "status", None)
+            ts = getattr(r, "timestamp", None)
+            ts_str = ts.isoformat() if ts is not None else None
+
+            writer.writerow([
+                export_time,
+                ip,
+                port,
+                status,
+                ts_str,
+            ])
+
+    logger.info("[active-export] Appended %d active IPs to %s", len(rows), path)
+
+
 def scan_cycle() -> None:
-    # 1) Gather targets (single DB read)
     with SessionLocal() as db:
         targets = unique_targets_from_file_and_db(db)
 
@@ -249,7 +282,6 @@ def scan_cycle() -> None:
     total_inserted = 0
     total_attempted = 0
 
-    # 2) Parallel scan + per-thread insert
     with ThreadPoolExecutor(max_workers=MAX_WORKERS) as pool:
         futures = []
         for t_batch in chunked(targets, BATCH_SIZE):
@@ -268,6 +300,8 @@ def scan_cycle() -> None:
         return
 
     print(f"[scanner] Inserted {total_inserted}/{total_attempted} rows into ip_list.")
+    
+    export_active_checked_ips_to_csv()
 
 
 def main():
