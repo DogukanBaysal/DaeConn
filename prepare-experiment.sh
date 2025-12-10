@@ -11,10 +11,10 @@ SCRIPT_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 COMPOSE_CMD=${COMPOSE_CMD:-"docker compose"}
 
 # Screen session names
-MAIN_SCREEN=main-docker
-WORKER1_SCREEN=worker-poller
-WORKER2_SCREEN=worker-peer
-WORKER3_SCREEN=worker-export
+MAIN_SCREEN=main-docker-$BLOCKCHAIN
+WORKER1_SCREEN=poller-$BLOCKCHAIN
+WORKER2_SCREEN=peer-$BLOCKCHAIN
+WORKER3_SCREEN=export-$BLOCKCHAIN
 
 target_help() {
     echo "Usage: $0 {init|clear|help}"

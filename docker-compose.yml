@@ -1,14 +1,14 @@
 services:
   db:
     image: postgres:16
-    container_name: pg_ips
     environment:
       POSTGRES_DB: ips
       POSTGRES_USER: ipsuser
       POSTGRES_PASSWORD: ipspass
-    ports: ["5432:5432"]
+    ports:
+      - "5432:5432"      # change to 5433:5432 in the *other* project if both run together
     volumes:
-      - pgdata:/var/lib/postgresql/data
+      - ./pgdata:/var/lib/postgresql/data
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ipsuser -d ips"]
       interval: 5s
@@ -17,24 +17,20 @@ services:
 
   app:
     build: .
-    container_name: ip_app
     depends_on:
       db:
         condition: service_healthy
     environment:
       DATABASE_URL: postgresql://ipsuser:ipspass@db:5432/ips
-      APP_DATA_DIR: /app                # <- base path inside container
+      APP_DATA_DIR: /app
     command: ["python", "main.py"]
     volumes:
-      # DO NOT mount /app (code stays in image)
       - type: bind
-        source: "${PWD}/targets"
+        source: ./targets
         target: /app/targets
       - type: bind
-        source: "${PWD}/state"
+        source: ./state
         target: /app/state
       - type: bind
-        source: "${PWD}/exports"
+        source: ./exports
         target: /app/exports
-volumes:
-  pgdata:
