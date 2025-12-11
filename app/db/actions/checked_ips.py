@@ -1,6 +1,7 @@
 from __future__ import annotations
 from datetime import datetime, timezone
 from typing import List, Optional, Sequence, Tuple
+from datetime import datetime, timezone, timedelta
 
 from sqlalchemy import select, update
 from sqlalchemy.orm import Session
@@ -125,4 +126,58 @@ def upsert_checked_ip(
 
     result = db.execute(stmt).scalar_one()
     db.commit()
+    return result
+
+
+
+def is_checked_within_hours(
+    db: Session,
+    ip: str,
+    port: int,
+    max_age_hours: float,
+) -> bool:
+    """
+    Return True if (ip, port) exists in checked_ips AND
+    its last_handshake is within the last `max_age_hours` hours.
+    """
+    stmt = select(CheckedIp).where(
+        CheckedIp.ip == ip,
+        CheckedIp.port == port
+    )
+
+    row = db.execute(stmt).scalar_one_or_none()
+    if row is None:
+        return False  # IP/port not in the table at all
+
+    if row.last_handshake is None:
+        return False  # no timestamp stored → treat as stale
+
+    now = datetime.now(timezone.utc)
+    age = now - row.last_handshake
+
+    return age <= timedelta(hours=max_age_hours)
+
+
+def set_last_handshake(
+    db: Session,
+    ip: str,
+    port: int,
+) -> CheckedIp | None:
+    """
+    Update the `last_handshake` timestamp to NOW() for (ip, port).
+    Returns the updated row, or None if not found.
+    """
+    now = datetime.now(timezone.utc)
+
+    stmt = (
+        update(CheckedIp)
+        .where(CheckedIp.ip == ip, CheckedIp.port == port)
+        .values(last_handshake=now)
+        .returning(CheckedIp)
+    )
+
+    result = db.execute(stmt).scalar_one_or_none()
+    if result:
+        db.commit()
+
     return result

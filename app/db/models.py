@@ -17,6 +17,10 @@ class CheckedIp(Base):
     timestamp: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )
+    last_handshake: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,          # allow NULL
+    )
     status: Mapped[str] = mapped_column(Text, nullable=False, server_default="unknown")
 
     __table_args__ = (

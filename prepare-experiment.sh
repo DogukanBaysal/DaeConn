@@ -39,7 +39,7 @@ target_init() {
 
     echo "Starting peer scanner in screen: $WORKER2_SCREEN"
     screen -dmS "$WORKER2_SCREEN" \
-        bash -lc "sleep 10 && cd '$SCRIPT_DIR' && $COMPOSE_CMD run --rm app python -m workers.peer_scanner"
+        bash -lc "sleep 60 && cd '$SCRIPT_DIR' && $COMPOSE_CMD run --rm app python -m workers.peer_scanner"
 
     echo "Starting exporter in screen: $WORKER3_SCREEN"
     screen -dmS "$WORKER3_SCREEN" \

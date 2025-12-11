@@ -8,6 +8,9 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
+VERSION = int(os.getenv("VERSION", 70015))
+
+
 def load_magic():
     raw = os.getenv("MAGIC")
     if raw is None:
@@ -83,7 +86,7 @@ def build_msg(cmd: str, payload: bytes) -> bytes:
     return header + payload
 
 def build_version_payload() -> bytes:
-    version= 70016; services = 0; ts = int(time.time())
+    version = VERSION; services = 0; ts = int(time.time())
     nonce = int.from_bytes(sha256d(str(ts).encode())[:8], "little")
     ua = b"/connector/"
     payload  = struct.pack("<iQq", version, services, ts)

@@ -15,7 +15,7 @@ from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.orm import Session
 
 from db.session import SessionLocal
-from db.actions.checked_ips import get_active_checked_ips
+from db.actions.checked_ips import get_active_checked_ips, set_last_handshake, is_checked_within_hours, upsert_checked_ip
 from db.models import IpList
 
 from network.scanner import scan_peer
@@ -32,6 +32,7 @@ logging.basicConfig(level=LOG_LEVEL, format="%(asctime)s %(levelname)s [%(thread
 logger = logging.getLogger("scanner")
 ACTIVE_IPS_CSV = os.getenv("ACTIVE_IPS_CSV", "exports/active_checked_ips.csv")
 
+MAX_AGE_HOURS = int(os.getenv("MAX_AGE_HOURS", 1))
 
 IPS_FILE = os.getenv("SCAN_IPS_FILE", "state/peers.txt")
 SCAN_INTERVAL_SECONDS = int(os.getenv("SCAN_INTERVAL_SECONDS", "60"))
@@ -43,7 +44,23 @@ BATCH_SIZE = int(os.getenv("SCAN_BATCH_SIZE", "12"))
 
 INSERT_CHUNK_SIZE = int(os.getenv("SCAN_INSERT_CHUNK_SIZE", "1000"))
 
+MIN_BIGINT = -2**63
+MAX_BIGINT = 2**63 - 1
 
+def to_signed_bigint_from_uint64(x: int) -> int:
+    """
+    Convert a uint64 (0..2^64-1) to a signed 64-bit integer (-2^63..2^63-1),
+    which is what Postgres BIGINT expects.
+    """
+    if x is None:
+        return None
+    if x < 0:
+        # already negative, probably not a uint64
+        return x
+    if x <= MAX_BIGINT:
+        return x
+    # map uint64 to signed representation
+    return x - 2**64
 
 def parse_ip_port_line(line: str) -> Optional[Tuple[str, int]]:
     line = line.strip()
@@ -81,14 +98,12 @@ def chunked(items: List[Any], size: int) -> Iterable[List[Any]]:
 
 
 def unique_targets_from_file_and_db(db: Session) -> List[Tuple[str, int]]:
-    file_targets = read_ips_file(IPS_FILE)
-
     active_rows = get_active_checked_ips(db, limit=CHECKED_ACTIVE_LIMIT)
     db_targets = [(str(r.ip), int(r.port)) for r in active_rows if r.ip and r.port]
 
     seen: set[Tuple[str, int]] = set()
     merged: List[Tuple[str, int]] = []
-    for lst in (file_targets, db_targets):
+    for lst in (db_targets, ):
         for t in lst:
             if t not in seen:
                 seen.add(t)
@@ -143,7 +158,7 @@ def normalize_scan_result(item: Dict[str, Any]) -> Dict[str, Any]:
         "destination_ip": item.get("destination_ip"),
         "destination_port": item.get("destination_port"),
         "last_seen": times["last_seen"],
-        "services": item.get("services"),
+        "services": to_signed_bigint_from_uint64(item.get("services")),
         "services_decoded": _services_decoded_to_text(item.get("services_decoded")),
     }
 
@@ -177,6 +192,7 @@ def scan_one_peer(ip: str, port: int) -> list[dict]:
 
 def process_batch(targets: list[tuple[str, int]]) -> list[dict]:
     results: list[dict] = []
+    response = []
     # logger.info("Processing batch of %d targets", len(targets))
     for ip, port in targets:
         results_from_peer = scan_one_peer(ip, port)
@@ -184,16 +200,20 @@ def process_batch(targets: list[tuple[str, int]]) -> list[dict]:
             dst = r.get("destination_ip"), r.get("destination_port")
             # logger.debug("-> decoded from %s:%s -> dest=%s last_seen=%s services=%s",
             #              ip, port, dst, r.get("last_seen"), r.get("services_decoded"))
+        if len(results_from_peer) == 0:
+            response.append((ip, port, "invalid"))
+        else:
+            response.append((ip, port, "valid"))
         results.extend(results_from_peer)
     # logger.info("Finished batch: got %d results", len(results))
-    return results
+    return results, response
 
 
 def _worker_scan_and_insert(t_batch: List[Any]) -> Tuple[int, int]:
     thread_name = threading.current_thread().name
     # logger.info("[%s] worker starting batch of %d targets", thread_name, len(t_batch))
     try:
-        batch_res = process_batch(t_batch) or []
+        batch_res, response_list = process_batch(t_batch) or [], []
     except Exception as e:
         logger.exception("process_batch error")
         return (0, 0)
@@ -214,7 +234,7 @@ def _worker_scan_and_insert(t_batch: List[Any]) -> Tuple[int, int]:
         with SessionLocal() as db:
             inserted = bulk_insert_ip_list(db, to_insert)
             # logger.info("[%s] inserted %d/%d rows", thread_name, inserted, len(to_insert))
-            return (inserted, len(to_insert))
+            return (inserted, len(to_insert), response_list)
     except Exception as e:
         logger.exception("DB error in worker (attempted=%d)", len(to_insert))
         return (0, len(to_insert))
@@ -270,7 +290,14 @@ def export_active_checked_ips_to_csv() -> None:
 
 def scan_cycle() -> None:
     with SessionLocal() as db:
-        targets = unique_targets_from_file_and_db(db)
+        all_targets = unique_targets_from_file_and_db(db)
+
+        # keep only IPs that were NOT checked within the last MAX_AGE_HOURS
+        targets = [
+            (ip, port)
+            for ip, port in all_targets
+            if not is_checked_within_hours(db, ip, port, MAX_AGE_HOURS)
+        ]
 
     if not targets:
         print("[scanner] No targets found (file + DB).")
@@ -289,7 +316,7 @@ def scan_cycle() -> None:
 
         for fut in as_completed(futures):
             try:
-                inserted, attempted = fut.result()
+                inserted, attempted, result_list = fut.result()
                 total_inserted += inserted
                 total_attempted += attempted
             except Exception as e:
@@ -303,8 +330,21 @@ def scan_cycle() -> None:
     
     export_active_checked_ips_to_csv()
 
+    with SessionLocal() as db:
+        for (ip, port, status) in result_list:
+            if status == "valid":
+                set_last_handshake(db, ip, port)
+
+
 
 def main():
+    now = datetime.now(timezone.utc)
+    with SessionLocal() as db:
+        file_targets = read_ips_file(IPS_FILE)
+        for (ip, port) in file_targets:
+            upsert_checked_ip(db, ip=ip, port=port, status="active", timestamp=now)
+
+
     interval = SCAN_INTERVAL_SECONDS
     print(f"[scanner] Starting continuous scan every {interval}s "
           f"(workers={MAX_WORKERS}, batch={BATCH_SIZE})")

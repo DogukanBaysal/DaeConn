@@ -18,5 +18,7 @@ __all__ = [
     "get_node_if_exists",
     "add_checked_ip",
     "update_checked_ip",
-    "upsert_checked_ip"
+    "upsert_checked_ip",
+    "is_checked_within_hours",
+    "set_last_handshake"
 ]
