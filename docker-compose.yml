@@ -5,8 +5,8 @@ services:
       POSTGRES_DB: ips
       POSTGRES_USER: ipsuser
       POSTGRES_PASSWORD: ipspass
-    ports:
-      - "5432:5432"      # change to 5433:5432 in the *other* project if both run together
+    # ports:
+    #   - "5432:5432"      # change to 5433:5432 in the *other* project if both run together
     volumes:
       - ./pgdata:/var/lib/postgresql/data
     healthcheck:
