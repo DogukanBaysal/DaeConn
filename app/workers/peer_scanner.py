@@ -209,18 +209,18 @@ def process_batch(targets: list[tuple[str, int]]) -> list[dict]:
     return results, response
 
 
-def _worker_scan_and_insert(t_batch: List[Any]) -> Tuple[int, int]:
+def _worker_scan_and_insert(t_batch: List[Any]) -> Tuple[int, int, list]:
     thread_name = threading.current_thread().name
     # logger.info("[%s] worker starting batch of %d targets", thread_name, len(t_batch))
     try:
-        batch_res, response_list = process_batch(t_batch) or [], []
+        batch_res, response_list = process_batch(t_batch)
     except Exception as e:
         logger.exception("process_batch error")
-        return (0, 0)
+        return (0, 0, [])
 
     if not batch_res:
         logger.info("[%s] no results from scan", thread_name)
-        return (0, 0)
+        return (0, 0, [])
 
     to_insert = [normalize_scan_result(x) for x in batch_res]
     to_insert = [r for r in to_insert
@@ -228,7 +228,7 @@ def _worker_scan_and_insert(t_batch: List[Any]) -> Tuple[int, int]:
 
     if not to_insert:
         logger.info("[%s] no valid insertable rows after normalization", thread_name)
-        return (0, 0)
+        return (0, 0, [])
 
     try:
         with SessionLocal() as db:
@@ -237,7 +237,7 @@ def _worker_scan_and_insert(t_batch: List[Any]) -> Tuple[int, int]:
             return (inserted, len(to_insert), response_list)
     except Exception as e:
         logger.exception("DB error in worker (attempted=%d)", len(to_insert))
-        return (0, len(to_insert))
+        return (0, len(to_insert), [])
 
 
 def export_active_checked_ips_to_csv() -> None:
@@ -329,6 +329,7 @@ def scan_cycle() -> None:
     print(f"[scanner] Inserted {total_inserted}/{total_attempted} rows into ip_list.")
     
     export_active_checked_ips_to_csv()
+
 
     with SessionLocal() as db:
         for (ip, port, status) in result_list:

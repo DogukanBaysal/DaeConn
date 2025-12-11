@@ -34,3 +34,5 @@ services:
       - type: bind
         source: ./exports
         target: /app/exports
+
+name: scanner_b
