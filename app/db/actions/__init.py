@@ -20,5 +20,6 @@ __all__ = [
     "update_checked_ip",
     "upsert_checked_ip",
     "is_checked_within_hours",
-    "set_last_handshake"
+    "set_last_handshake",
+    "get_all_checked_ips"
 ]

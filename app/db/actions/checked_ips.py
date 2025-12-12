@@ -3,21 +3,50 @@ from datetime import datetime, timezone
 from typing import List, Optional, Sequence, Tuple
 from datetime import datetime, timezone, timedelta
 
-from sqlalchemy import select, update
+from sqlalchemy import select, update, or_
 from sqlalchemy.orm import Session
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 
 from ..models import CheckedIp
 
 
-
-def get_active_checked_ips(db: Session, limit: int = 10000) -> List[CheckedIp]:
+def get_all_checked_ips(
+    db: Session,
+    offset: int = 0,
+) -> List[CheckedIp]:
     """
-    Return rows where status == 'active', newest first by timestamp.
+    Return all rows from checked_ips, newest first by timestamp.
     """
     stmt = (
         select(CheckedIp)
+        .order_by(CheckedIp.timestamp.desc())
+        .offset(offset)
+    )
+    return list(db.execute(stmt).scalars())
+
+def get_active_checked_ips(
+    db: Session,
+    limit: int = 99999999,
+    stale_after_minutes: int = 60,
+) -> List[CheckedIp]:
+    """
+    Return rows where:
+      - status == 'active'
+      - AND (last_handshake is NULL OR last_handshake older than now - stale_after_minutes)
+
+    Newest first by timestamp.
+    """
+    cutoff = datetime.utcnow() - timedelta(minutes=stale_after_minutes)
+
+    stmt = (
+        select(CheckedIp)
         .where(CheckedIp.status == "active")
+        .where(
+            or_(
+                CheckedIp.last_handshake.is_(None),
+                CheckedIp.last_handshake < cutoff,
+            )
+        )
         .order_by(CheckedIp.timestamp.desc())
         .limit(limit)
     )

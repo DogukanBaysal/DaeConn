@@ -14,7 +14,8 @@ COMPOSE_CMD=${COMPOSE_CMD:-"docker compose"}
 MAIN_SCREEN=main-docker-$BLOCKCHAIN
 WORKER1_SCREEN=poller-$BLOCKCHAIN
 WORKER2_SCREEN=peer-$BLOCKCHAIN
-WORKER3_SCREEN=export-$BLOCKCHAIN
+WORKER3_SCREEN=export-scanned-$BLOCKCHAIN
+WORKER4_SCREEN=export-checked-$BLOCKCHAIN   
 
 target_help() {
     echo "Usage: $0 {init|clear|help}"
@@ -31,7 +32,7 @@ target_init() {
 
     # main stack (docker-compose up)
     screen -dmS "$MAIN_SCREEN" \
-        bash -lc "cd '$SCRIPT_DIR' && $COMPOSE_CMD up --build"
+        bash -lc "cd '$SCRIPT_DIR' && $COMPOSE_CMD up --build > compose.log 2>&1"
 
     echo "Starting poller in screen: $WORKER1_SCREEN"
     screen -dmS "$WORKER1_SCREEN" \
@@ -41,9 +42,13 @@ target_init() {
     screen -dmS "$WORKER2_SCREEN" \
         bash -lc "sleep 60 && cd '$SCRIPT_DIR' && $COMPOSE_CMD run --rm app python -m workers.peer_scanner"
 
-    echo "Starting exporter in screen: $WORKER3_SCREEN"
+    echo "Starting scanned_ips exporter in screen: $WORKER3_SCREEN"
     screen -dmS "$WORKER3_SCREEN" \
         bash -lc "sleep 60 && cd '$SCRIPT_DIR' && $COMPOSE_CMD run --rm app python -m workers.export_scanned_csv"
+
+    echo "Starting checked_ips exporter in screen: $WORKER4_SCREEN"
+    screen -dmS "$WORKER4_SCREEN" \
+        bash -lc "sleep 60 && cd '$SCRIPT_DIR' && $COMPOSE_CMD run --rm app python -m workers.export_checked_ips"
 
     echo
     echo "Screen sessions created:"
@@ -51,6 +56,7 @@ target_init() {
     echo "  $WORKER1_SCREEN"
     echo "  $WORKER2_SCREEN"
     echo "  $WORKER3_SCREEN"
+    echo "  $WORKER4_SCREEN"
     echo
     echo "Attach with:  screen -r $MAIN_SCREEN   (or worker-* names)"
 }
@@ -58,10 +64,15 @@ target_init() {
 target_clear() {
     echo "Stopping docker stack..."
     cd "$SCRIPT_DIR" || exit 1
-    $COMPOSE_CMD down || true
+    $COMPOSE_CMD down --remove-orphans --volumes || true
 
     echo "Killing all screen sessions..."
-    for session in "$MAIN_SCREEN" "$WORKER1_SCREEN" "$WORKER2_SCREEN" "$WORKER3_SCREEN"; do
+    for session in \
+        "$MAIN_SCREEN" \
+        "$WORKER1_SCREEN" \
+        "$WORKER2_SCREEN" \
+        "$WORKER3_SCREEN" \
+        "$WORKER4_SCREEN"; do
         screen -S "$session" -X quit 2>/dev/null || true
     done
 

@@ -2,3 +2,6 @@
 /state
 /targets
 /pgdata
+*.log
+.env
+!.env.example

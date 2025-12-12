@@ -98,7 +98,7 @@ def chunked(items: List[Any], size: int) -> Iterable[List[Any]]:
 
 
 def unique_targets_from_file_and_db(db: Session) -> List[Tuple[str, int]]:
-    active_rows = get_active_checked_ips(db, limit=CHECKED_ACTIVE_LIMIT)
+    active_rows = get_active_checked_ips(db, limit=CHECKED_ACTIVE_LIMIT, stale_after_minutes=MAX_AGE_HOURS*60)
     db_targets = [(str(r.ip), int(r.port)) for r in active_rows if r.ip and r.port]
 
     seen: set[Tuple[str, int]] = set()
@@ -108,7 +108,6 @@ def unique_targets_from_file_and_db(db: Session) -> List[Tuple[str, int]]:
             if t not in seen:
                 seen.add(t)
                 merged.append(t)
-
     return merged
 
 
@@ -244,7 +243,7 @@ def export_active_checked_ips_to_csv() -> None:
     export_time = datetime.now(timezone.utc).isoformat()
 
     with SessionLocal() as db:
-        rows = get_active_checked_ips(db, limit=CHECKED_ACTIVE_LIMIT)
+        rows = get_active_checked_ips(db)
 
     if not rows:
         logger.info("[active-export] No active checked IPs to export.")
@@ -291,14 +290,10 @@ def export_active_checked_ips_to_csv() -> None:
 def scan_cycle() -> None:
     with SessionLocal() as db:
         all_targets = unique_targets_from_file_and_db(db)
-
-        # keep only IPs that were NOT checked within the last MAX_AGE_HOURS
         targets = [
             (ip, port)
             for ip, port in all_targets
-            if not is_checked_within_hours(db, ip, port, MAX_AGE_HOURS)
         ]
-
     if not targets:
         print("[scanner] No targets found (file + DB).")
         return
@@ -308,6 +303,7 @@ def scan_cycle() -> None:
 
     total_inserted = 0
     total_attempted = 0
+    all_results = []
 
     with ThreadPoolExecutor(max_workers=MAX_WORKERS) as pool:
         futures = []
@@ -319,6 +315,8 @@ def scan_cycle() -> None:
                 inserted, attempted, result_list = fut.result()
                 total_inserted += inserted
                 total_attempted += attempted
+                if result_list:
+                    all_results.extend(result_list)
             except Exception as e:
                 print(f"[scanner] worker future error: {e}")
 
@@ -328,11 +326,12 @@ def scan_cycle() -> None:
 
     print(f"[scanner] Inserted {total_inserted}/{total_attempted} rows into ip_list.")
     
-    export_active_checked_ips_to_csv()
+    #export_active_checked_ips_to_csv()
 
+    print("[scanner] Result list len is ", len(all_results))
 
     with SessionLocal() as db:
-        for (ip, port, status) in result_list:
+        for (ip, port, status) in all_results:
             if status == "valid":
                 set_last_handshake(db, ip, port)
 

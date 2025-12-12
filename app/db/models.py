@@ -19,7 +19,7 @@ class CheckedIp(Base):
     )
     last_handshake: Mapped[Optional[datetime]] = mapped_column(
         DateTime(timezone=True),
-        nullable=True,          # allow NULL
+        nullable=True,       
     )
     status: Mapped[str] = mapped_column(Text, nullable=False, server_default="unknown")
 
@@ -46,7 +46,6 @@ class IpList(Base):
     services_decoded: Mapped[Optional[str]] = mapped_column(Text)
 
     __table_args__ = (
-        # PK already indexed, but you asked for an explicit one for clarity
         Index("idx_ip_list_id", "id"),
         Index("idx_ip_list_timestamp", "timestamp"),
         Index("idx_ip_list_destination_ip", "destination_ip"),

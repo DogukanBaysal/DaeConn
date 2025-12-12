@@ -1,6 +1,7 @@
 services:
   db:
     image: postgres:16
+    command: ["postgres", "-c", "max_connections=2000"]
     environment:
       POSTGRES_DB: ips
       POSTGRES_USER: ipsuser
@@ -35,4 +36,4 @@ services:
         source: ./exports
         target: /app/exports
 
-name: scanner_b
+name: connector_bitcoin
