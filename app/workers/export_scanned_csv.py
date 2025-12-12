@@ -4,6 +4,7 @@ from __future__ import annotations
 import os
 import time
 import csv
+import traceback
 from pathlib import Path
 from typing import List, Dict, Any
 
@@ -20,6 +21,10 @@ EXPORT_FILE = os.getenv("EXPORT_FILE", "app/exports/scanned_ips.csv")
 EXPORT_STATE_FILE = os.getenv("EXPORT_STATE_FILE", "state/last_scanned_export_id.txt")
 EXPORT_INTERVAL_SECONDS = int(os.getenv("EXPORT_INTERVAL_SECONDS", "20"))
 EXPORT_FETCH_LIMIT = int(os.getenv("EXPORT_FETCH_LIMIT", "5000"))
+
+# Retry/backoff behavior
+RETRY_BASE_SECONDS = float(os.getenv("EXPORT_RETRY_BASE_SECONDS", "2"))
+RETRY_MAX_SECONDS = float(os.getenv("EXPORT_RETRY_MAX_SECONDS", "60"))
 
 CSV_FIELDS = [
     "id",
@@ -83,44 +88,72 @@ def export_once() -> int:
     """
     Exports new scanned_ips rows after the last exported id.
     Returns the max exported id this round (or 0 if none).
+    Never raises: failures are caught and logged.
     """
-    last_id = load_last_id(EXPORT_STATE_FILE)
+    try:
+        last_id = load_last_id(EXPORT_STATE_FILE)
 
-    with SessionLocal() as db:
-        rows: List[ScannedIp] = get_scanned_ips_after_id(db, last_id=last_id, limit=EXPORT_FETCH_LIMIT)
+        with SessionLocal() as db:
+            rows: List[ScannedIp] = get_scanned_ips_after_id(
+                db, last_id=last_id, limit=EXPORT_FETCH_LIMIT
+            )
 
-    if not rows:
-        print(f"[export] No new scanned_ips rows after id={last_id}")
+        if not rows:
+            print(f"[export] No new scanned_ips rows after id={last_id}")
+            return 0
+
+        new_max_id = max(r.id for r in rows)
+        ensure_parent(EXPORT_FILE)
+
+        need_header = file_needs_header(EXPORT_FILE)
+        with open(Path(EXPORT_FILE).expanduser(), mode="a", newline="", encoding="utf-8") as f:
+            writer = csv.DictWriter(f, fieldnames=CSV_FIELDS)
+            if need_header:
+                writer.writeheader()
+            for r in rows:
+                writer.writerow(row_to_dict(r))
+
+        save_last_id(EXPORT_STATE_FILE, new_max_id)
+        print(f"[export] Wrote {len(rows)} rows → {EXPORT_FILE} (last_id={new_max_id})")
+        return new_max_id
+
+    except Exception as e:
+        print(f"[export][ERROR] export_once failed: {e}")
+        traceback.print_exc()
         return 0
 
-    new_max_id = max(r.id for r in rows)
-    ensure_parent(EXPORT_FILE)
-
-    need_header = file_needs_header(EXPORT_FILE)
-    with open(Path(EXPORT_FILE).expanduser(), mode="a", newline="", encoding="utf-8") as f:
-        writer = csv.DictWriter(f, fieldnames=CSV_FIELDS)
-        if need_header:
-            writer.writeheader()
-        for r in rows:
-            writer.writerow(row_to_dict(r))
-
-    save_last_id(EXPORT_STATE_FILE, new_max_id)
-    print(f"[export] Wrote {len(rows)} rows → {EXPORT_FILE} (last_id={new_max_id})")
-    return new_max_id
 
 def main():
     interval = EXPORT_INTERVAL_SECONDS
     print(f"[export] Starting continuous export every {interval}s → {EXPORT_FILE}")
+
+    retry_sleep = RETRY_BASE_SECONDS
+
     try:
         while True:
             start = time.time()
-            export_once()
-            elapsed = time.time() - start
-            sleep_for = max(0.0, interval - elapsed)
-            if sleep_for:
-                time.sleep(sleep_for)
+            try:
+                export_once()
+                # success => reset backoff
+                retry_sleep = RETRY_BASE_SECONDS
+
+                elapsed = time.time() - start
+                sleep_for = max(0.0, interval - elapsed)
+                if sleep_for:
+                    time.sleep(sleep_for)
+
+            except Exception as e:
+                # Should be rare since export_once() catches, but keep main loop immortal.
+                print(f"[export][FATAL-LOOP-ERROR] {e}")
+                traceback.print_exc()
+
+                print(f"[export] Retrying in {retry_sleep:.1f}s ...")
+                time.sleep(retry_sleep)
+                retry_sleep = min(RETRY_MAX_SECONDS, retry_sleep * 2)
+
     except KeyboardInterrupt:
         print("\n[export] Stopped by user.")
+
 
 if __name__ == "__main__":
     main()
