@@ -30,7 +30,6 @@ target_init() {
     echo "Starting Docker stack in screen: $MAIN_SCREEN"
     cd "$SCRIPT_DIR" || exit 1
 
-    # main stack (docker-compose up)
     screen -dmS "$MAIN_SCREEN" \
         bash -lc "cd '$SCRIPT_DIR' && $COMPOSE_CMD up --build > compose.log 2>&1"
 

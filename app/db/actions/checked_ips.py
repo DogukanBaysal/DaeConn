@@ -58,7 +58,7 @@ def get_node_if_exists(db: Session, ip: str, port: int) -> Optional[datetime]:
     Checks if a (ip, port) exists in checked_ips.
     If yes, returns to it.
     """
-    from ..models import CheckedIp  # local import to avoid circular dependency
+    from ..models import CheckedIp  
 
     stmt = select(CheckedIp).where(
         CheckedIp.ip == ip,
@@ -142,7 +142,7 @@ def upsert_checked_ip(
         pg_insert(CheckedIp)
         .values(**insert_values)
         .on_conflict_do_update(
-            index_elements=["ip", "port"],  # uses your unique constraint
+            index_elements=["ip", "port"],
             set_={
                 "status": (status if status is not None else CheckedIp.status),
                 "timestamp": (

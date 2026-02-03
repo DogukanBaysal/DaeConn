@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 from __future__ import annotations
 import base64, hashlib, socket, struct, sys, time
 from datetime import datetime

@@ -177,7 +177,6 @@ def main():
             start = time.time()
             poll_once()
             elapsed = time.time() - start
-            # sleep for remaining time, never less than 0
             to_sleep = max(0, interval - elapsed)
             if to_sleep:
                 print(f"[poller] Sleeping {to_sleep:.1f}s before next cycle…")

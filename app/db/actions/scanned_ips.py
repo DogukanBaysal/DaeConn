@@ -65,7 +65,7 @@ def get_scanned_ips_by_status(
     db: Session, status: str = "active"
 ) -> List[ScannedIp]:
     """
-    Fetch rows by status (e.g., 'active', 'inactive', 'unknown'), newest first by scan_timestamp.
+    Fetch rows by status, newest first by scan_timestamp.
     """
     stmt = (
         select(ScannedIp)
@@ -121,7 +121,6 @@ def add_scan_from_iplist_row(
 ):
     """
     Create a scanned_ips record using fields copied from an IpList row.
-    If cache=True, it means no new network scan was performed (used cached info).
     """
     now = scan_timestamp or datetime.now(timezone.utc)
     return add_scanned_ip(

@@ -11,4 +11,4 @@ if __name__ == "__main__":
     print("Creating tables via SQLAlchemy ORM...")
     Base.metadata.create_all(bind=engine)
 
-    print("Done. Tables & indexes ensured. (This container exits; Postgres stays up.)")
+    print("Done. Tables & indexes ensured.")

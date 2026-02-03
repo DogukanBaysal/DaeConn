@@ -67,9 +67,6 @@ def row_to_dict(r: CheckedIp, export_ts: datetime) -> Dict[str, Any]:
 def export_once() -> int:
     """
     Append ALL checked_ips rows to CSV.
-    If file does not exist or is empty, header is written.
-    Never overwrites existing data.
-    Resilient: skips individual bad rows instead of failing the whole export.
     """
     try:
         ensure_parent(EXPORT_FILE)
@@ -98,7 +95,6 @@ def export_once() -> int:
                     except Exception as row_err:
                         skipped += 1
                         print(f"[export_checked][ROW-ERROR] id={getattr(r,'id',None)} err={row_err}")
-                        # keep going no matter what
                         continue
 
         print(
@@ -108,7 +104,6 @@ def export_once() -> int:
         return wrote
 
     except Exception as e:
-        # still never crash the process; main loop will retry
         print(f"[export_checked][ERROR] export_once failed: {e}")
         traceback.print_exc()
         return 0
@@ -125,7 +120,7 @@ def main():
             start = time.time()
             try:
                 export_once()
-                retry_sleep = RETRY_BASE_SECONDS  # reset backoff on success or partial success
+                retry_sleep = RETRY_BASE_SECONDS 
 
                 elapsed = time.time() - start
                 sleep_for = max(0.0, interval - elapsed)
@@ -133,7 +128,6 @@ def main():
                     time.sleep(sleep_for)
 
             except Exception as e:
-                # extra safety: keep the loop immortal
                 print(f"[export_checked][FATAL-LOOP-ERROR] {e}")
                 traceback.print_exc()
 

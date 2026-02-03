@@ -24,10 +24,6 @@ def get_ip_list_range(
     end_id: Optional[int] = None,
     limit: int = 5000,
 ) -> List[IpList]:
-    """
-    Flexible range query: [start_id, end_id] (inclusive bounds if provided),
-    ordered by id ascending.
-    """
     stmt = select(IpList)
     if start_id is not None:
         stmt = stmt.where(IpList.id >= start_id)

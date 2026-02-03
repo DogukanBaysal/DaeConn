@@ -1,4 +1,3 @@
-# app/db/session.py
 import os
 from sqlalchemy import create_engine, text
 from sqlalchemy.orm import sessionmaker

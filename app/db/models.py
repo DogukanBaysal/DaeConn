@@ -74,7 +74,6 @@ class ScannedIp(Base):
     cache: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default="false")
 
     __table_args__ = (
-        # helpful indexes for common lookups
         Index("idx_scanned_ips_id", "id"),
         Index("idx_scanned_ips_timestamp", "timestamp"),
         Index("idx_scanned_ips_destination_ip", "destination_ip"),

@@ -1,4 +1,3 @@
-# app/workers/peer_scanner.py
 from __future__ import annotations
 
 import os
@@ -48,14 +47,9 @@ MIN_BIGINT = -2**63
 MAX_BIGINT = 2**63 - 1
 
 def to_signed_bigint_from_uint64(x: int) -> int:
-    """
-    Convert a uint64 (0..2^64-1) to a signed 64-bit integer (-2^63..2^63-1),
-    which is what Postgres BIGINT expects.
-    """
     if x is None:
         return None
     if x < 0:
-        # already negative, probably not a uint64
         return x
     if x <= MAX_BIGINT:
         return x
@@ -70,7 +64,6 @@ def parse_ip_port_line(line: str) -> Optional[Tuple[str, int]]:
         return None
     ip, port = line.rsplit(":", 1)
     try:
-        # basic validation + normalize
         ip_address(ip)
         port_i = int(port)
         if not (1 <= port_i <= 65535):
@@ -128,7 +121,6 @@ def _parse_time_fields(item: Dict[str, Any]) -> Dict[str, Any]:
         except Exception:
             ts_dt = None
 
-    # last_seen can be epoch
     ls_dt: Optional[datetime] = None
     if "last_seen" in item and item["last_seen"] is not None:
         try:
@@ -160,7 +152,6 @@ def normalize_scan_result(item: Dict[str, Any]) -> Dict[str, Any]:
         "services": to_signed_bigint_from_uint64(item.get("services")),
         "services_decoded": _services_decoded_to_text(item.get("services_decoded")),
     }
-
 
 
 def bulk_insert_ip_list(db: Session, rows: List[Dict[str, Any]]) -> int:

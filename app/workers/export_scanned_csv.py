@@ -1,4 +1,3 @@
-# app/workers/export_scanned_csv.py
 from __future__ import annotations
 
 import os
@@ -22,7 +21,6 @@ EXPORT_STATE_FILE = os.getenv("EXPORT_STATE_FILE", "state/last_scanned_export_id
 EXPORT_INTERVAL_SECONDS = int(os.getenv("EXPORT_INTERVAL_SECONDS", "20"))
 EXPORT_FETCH_LIMIT = int(os.getenv("EXPORT_FETCH_LIMIT", "5000"))
 
-# Retry/backoff behavior
 RETRY_BASE_SECONDS = float(os.getenv("EXPORT_RETRY_BASE_SECONDS", "2"))
 RETRY_MAX_SECONDS = float(os.getenv("EXPORT_RETRY_MAX_SECONDS", "60"))
 
@@ -87,8 +85,6 @@ def row_to_dict(r: ScannedIp) -> Dict[str, Any]:
 def export_once() -> int:
     """
     Exports new scanned_ips rows after the last exported id.
-    Returns the max exported id this round (or 0 if none).
-    Never raises: failures are caught and logged.
     """
     try:
         last_id = load_last_id(EXPORT_STATE_FILE)
@@ -134,7 +130,6 @@ def main():
             start = time.time()
             try:
                 export_once()
-                # success => reset backoff
                 retry_sleep = RETRY_BASE_SECONDS
 
                 elapsed = time.time() - start
@@ -143,7 +138,6 @@ def main():
                     time.sleep(sleep_for)
 
             except Exception as e:
-                # Should be rare since export_once() catches, but keep main loop immortal.
                 print(f"[export][FATAL-LOOP-ERROR] {e}")
                 traceback.print_exc()
 
