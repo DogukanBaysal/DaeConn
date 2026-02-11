@@ -27,7 +27,7 @@ sudo apt install screen
 Clone the repository and enter the project directory:
 
 ```bash
-git clone https://gitlab.uzh.ch/mp-p2p-topology/Bitcoin-Fork-Connector
+git clone https://github.com/DogukanBaysal/Bitcoin-Fork-Connector
 cd Bitcoin-Fork-Connector
 ```
 
