@@ -27,7 +27,7 @@ sudo apt install screen
 Clone the repository and enter the project directory:
 
 ```bash
-git clone https://github.com/DogukanBaysal/Bitcoin-Fork-Connector
+git clone https://gitlab.uzh.ch/mp-p2p-topology/Bitcoin-Fork-Connector
 cd Bitcoin-Fork-Connector
 ```
 
@@ -65,13 +65,15 @@ screen -r <screen-name>
 When the experiment is initialized, the following screen sessions are created automatically.  
 Each session corresponds to a specific workflow component:
 
-- **`main-docker`**: starts the Docker-based system, including the PostgreSQL database and all supporting containers.
-- **`worker-poller`**:  
+- **`main-docker-<blockchain_name>`**: starts the Docker-based system, including the PostgreSQL database and all supporting containers.
+- **`poller-<blockchain_name>`**:  
   runs the port checking component that checks whether discovered peer IPs are reachable.
-- **`worker-peer`**:  
+- **`peer-<blockchain_name>`**:  
   runs the peer scanner component, which handshakes with active peers and retrieves peer lists.
-- **`worker-export`**:  
-  periodically exports scanned IP information to CSV files in a human-readable format.
+- **`export-scanned-<blockchain_name>`**:  
+  periodically exports scanned IP information to a CSV file in a human-readable format.
+- **`export-checked-<blockchain_name>`**:  
+  periodically exports checked IP information (snapshot of discovered unique IPs) to a CSV file in a human-readable format.
 
 ---
 
@@ -156,6 +158,9 @@ EXPORT_FILE=exports/scanned_ips.csv
 EXPORT_STATE_FILE=state/last_scanned_export_id.txt
 EXPORT_INTERVAL_SECONDS=10
 EXPORT_FETCH_LIMIT=1000000
+
+EXPORT_CHECKED_FILE=exports/checked_ips.csv
+EXPORT_CHECKED_INTERVAL_SECONDS=21600
 
 SCAN_IPS_FILE=targets/peers.txt
 ACTIVE_IPS_CSV=exports/active_checked_ips.csv
