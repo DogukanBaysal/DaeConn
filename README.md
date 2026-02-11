@@ -108,7 +108,14 @@ Second, a separate `.env` file is used for configuring the experiment parameters
 
 ---
 
-### Exporter Configuration
+### Scanned IP Exporter Configuration
+
+- **`EXPORT_CHECKED_FILE`** — Output CSV file containing exported checked IPs.
+- **`EXPORT_CHECKED_INTERVAL_SECONDS`** — Time interval between exporter cycles.
+
+---
+
+### Checked IP Exporter Configuration
 
 - **`EXPORT_FILE`** — Output CSV file containing exported scanned IPs.
 - **`EXPORT_STATE_FILE`** — File storing the last exported scan ID.
