@@ -37,6 +37,31 @@ of the workflow.
 
 ---
 
+## Seed Node Configuration
+
+Create the required directory and seed file:
+
+```bash
+mkdir -p targets
+touch targets/peers.txt
+```
+
+Open the file and add seed nodes in the following format:
+
+```txt
+IP::PORT
+```
+
+
+Each seed node must be written on a separate line. For example:
+```txt
+1.1.1.1::8333
+2.2.2.2::8333
+3.3.3.3::8333
+```
+
+---
+
 ## Running the Experiment
 
 - Initialize the experiment environment, create screen sessions, and start the connector system:
