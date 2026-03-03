@@ -6,8 +6,6 @@ services:
       POSTGRES_DB: ips
       POSTGRES_USER: ipsuser
       POSTGRES_PASSWORD: ipspass
-    # ports:
-    #   - "5432:5432"      # change to 5433:5432 in the *other* project if both run together
     volumes:
       - ./pgdata:/var/lib/postgresql/data
     healthcheck:
@@ -35,5 +33,24 @@ services:
       - type: bind
         source: ./exports
         target: /app/exports
+
+  grafana:
+    image: grafana/grafana:latest
+    depends_on:
+      db:
+        condition: service_healthy
+    ports:
+      - "3000:3000"
+    environment:
+      GF_SECURITY_ADMIN_USER: admin
+      GF_SECURITY_ADMIN_PASSWORD: admin
+      GF_DATE_FORMATS_DEFAULT_TIMEZONE: Europe/Zurich
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./grafana/provisioning:/etc/grafana/provisioning
+      - ./grafana/dashboards:/var/lib/grafana/dashboards:ro
+
+volumes:
+  grafana_data:
 
 name: connector_bitcoin

@@ -1,0 +1,18 @@
+apiVersion: 1
+
+datasources:
+  - name: grafana-postgresql-datasource
+    uid: pg_ips
+    type: postgres
+    access: proxy
+    url: db:5432
+    database: ips
+    user: ipsuser
+    secureJsonData:
+      password: ipspass
+    jsonData:
+      sslmode: disable
+      postgresVersion: 1600
+    isDefault: true
+    version: 2
+    editable: true

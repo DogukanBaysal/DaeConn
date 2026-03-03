@@ -1,0 +1,815 @@
+{
+  "annotations": {
+    "list": [
+      {
+        "builtIn": 1,
+        "enable": true,
+        "hide": true,
+        "iconColor": "rgba(0, 211, 255, 1)",
+        "name": "Annotations & Alerts",
+        "type": "dashboard"
+      }
+    ]
+  },
+  "description": "",
+  "editable": true,
+  "fiscalYearStartMonth": 0,
+  "graphTooltip": 1,
+  "links": [],
+  "panels": [
+    {
+      "datasource": "grafana-postgresql-datasource",
+      "description": "Distinct destination IPs discovered per 30-minute interval (ip_list).",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisBorderShow": false,
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "barWidthFactor": 0.6,
+            "drawStyle": "line",
+            "fillOpacity": 0,
+            "gradientMode": "none",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "insertNulls": false,
+            "lineInterpolation": "linear",
+            "lineWidth": 1,
+            "pointSize": 5,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "auto",
+            "showValues": true,
+            "spanNulls": false,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": 0
+              },
+              {
+                "color": "red",
+                "value": 80
+              }
+            ]
+          },
+          "unit": "none"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 0
+      },
+      "id": 1,
+      "options": {
+        "legend": {
+          "calcs": [],
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "hideZeros": false,
+          "mode": "single",
+          "sort": "none"
+        }
+      },
+      "pluginVersion": "12.4.0",
+      "targets": [
+        {
+          "editorMode": "code",
+          "format": "time_series",
+          "group": [],
+          "metricColumn": "none",
+          "rawQuery": true,
+          "rawSql": "SELECT\n  $__timeGroupAlias(timestamp, '30m'),\n  count(DISTINCT destination_ip)::double precision AS value\nFROM ip_list\nWHERE $__timeFilter(timestamp)\n  AND destination_ip IS NOT NULL\nGROUP BY 1\nORDER BY 1;",
+          "refId": "A",
+          "select": [],
+          "sql": {
+            "columns": [
+              {
+                "parameters": [],
+                "type": "function"
+              }
+            ],
+            "groupBy": [
+              {
+                "property": {
+                  "type": "string"
+                },
+                "type": "groupBy"
+              }
+            ],
+            "limit": 50
+          },
+          "timeColumn": "time"
+        }
+      ],
+      "title": "Unique IP Discovery (Per Interval)",
+      "type": "timeseries"
+    },
+    {
+      "datasource": "grafana-postgresql-datasource",
+      "description": "Cumulative distinct destination IPs over time based on first-seen timestamps (ip_list).",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisBorderShow": false,
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "barWidthFactor": 0.6,
+            "drawStyle": "line",
+            "fillOpacity": 0,
+            "gradientMode": "none",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "insertNulls": false,
+            "lineInterpolation": "linear",
+            "lineStyle": {
+              "fill": "solid"
+            },
+            "lineWidth": 1,
+            "pointSize": 7,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "always",
+            "showValues": true,
+            "spanNulls": false,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "fieldMinMax": true,
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": 0
+              },
+              {
+                "color": "red",
+                "value": 80
+              }
+            ]
+          },
+          "unit": "none"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 0
+      },
+      "id": 2,
+      "options": {
+        "legend": {
+          "calcs": [],
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "hideZeros": false,
+          "mode": "single",
+          "sort": "none"
+        }
+      },
+      "pluginVersion": "12.4.0",
+      "targets": [
+        {
+          "format": "time_series",
+          "group": [],
+          "metricColumn": "none",
+          "rawSql": "WITH first_seen AS (\n  SELECT\n    destination_ip,\n    min(timestamp) AS first_ts\n  FROM ip_list\n  WHERE destination_ip IS NOT NULL\n  GROUP BY 1\n)\nSELECT\n  $__timeGroupAlias(first_ts, '30m'),\n  count(*) OVER (ORDER BY $__timeGroup(first_ts, '30m'))::double precision AS value\nFROM first_seen\nWHERE $__timeFilter(first_ts)\nORDER BY 1;",
+          "refId": "A",
+          "select": [],
+          "timeColumn": "time"
+        }
+      ],
+      "title": "Cumulative Unique IP Discovery",
+      "type": "timeseries"
+    },
+    {
+      "datasource": "grafana-postgresql-datasource",
+      "description": "Distinct destination IPs that are active per 30-minute interval (scanned_ips).",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisBorderShow": false,
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "barWidthFactor": 0.6,
+            "drawStyle": "line",
+            "fillOpacity": 0,
+            "gradientMode": "none",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "insertNulls": false,
+            "lineInterpolation": "linear",
+            "lineWidth": 1,
+            "pointSize": 5,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "auto",
+            "showValues": true,
+            "spanNulls": false,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": 0
+              },
+              {
+                "color": "red",
+                "value": 80
+              }
+            ]
+          },
+          "unit": "none"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 8
+      },
+      "id": 3,
+      "options": {
+        "legend": {
+          "calcs": [],
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "hideZeros": false,
+          "mode": "single",
+          "sort": "none"
+        }
+      },
+      "pluginVersion": "12.4.0",
+      "targets": [
+        {
+          "format": "time_series",
+          "group": [],
+          "metricColumn": "none",
+          "rawSql": "SELECT\n  $__timeGroupAlias(scan_timestamp, '30m'),\n  count(DISTINCT destination_ip)::double precision AS value\nFROM scanned_ips\nWHERE $__timeFilter(scan_timestamp)\n  AND status = 'active'\n  AND destination_ip IS NOT NULL\nGROUP BY 1\nORDER BY 1;",
+          "refId": "A",
+          "select": [],
+          "timeColumn": "time"
+        }
+      ],
+      "title": "Unique Active IPs (Per Interval)",
+      "type": "timeseries"
+    },
+    {
+      "datasource": "grafana-postgresql-datasource",
+      "description": "Cumulative distinct destination IPs ever observed as active (scanned_ips).",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisBorderShow": false,
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "barWidthFactor": 0.6,
+            "drawStyle": "line",
+            "fillOpacity": 0,
+            "gradientMode": "none",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "insertNulls": false,
+            "lineInterpolation": "linear",
+            "lineWidth": 1,
+            "pointSize": 5,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "always",
+            "showValues": true,
+            "spanNulls": false,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": 0
+              },
+              {
+                "color": "red",
+                "value": 80
+              }
+            ]
+          },
+          "unit": "none"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 8
+      },
+      "id": 4,
+      "options": {
+        "legend": {
+          "calcs": [],
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "hideZeros": false,
+          "mode": "single",
+          "sort": "none"
+        }
+      },
+      "pluginVersion": "12.4.0",
+      "targets": [
+        {
+          "format": "time_series",
+          "group": [],
+          "metricColumn": "none",
+          "rawSql": "WITH first_active AS (\n  SELECT\n    destination_ip,\n    min(scan_timestamp) AS first_ts\n  FROM scanned_ips\n  WHERE status = 'active'\n    AND destination_ip IS NOT NULL\n  GROUP BY 1\n)\nSELECT\n  $__timeGroupAlias(first_ts, '30m'),\n  count(*) OVER (ORDER BY $__timeGroup(first_ts, '30m'))::double precision AS value\nFROM first_active\nWHERE $__timeFilter(first_ts)\nORDER BY 1;",
+          "refId": "A",
+          "select": [],
+          "timeColumn": "time"
+        }
+      ],
+      "title": "Cumulative Unique Active IPs",
+      "type": "timeseries"
+    },
+    {
+      "datasource": "grafana-postgresql-datasource",
+      "description": "Distinct destination IPs per 30-minute interval split by status (stacked).",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisBorderShow": false,
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "barWidthFactor": 0.6,
+            "drawStyle": "line",
+            "fillOpacity": 0,
+            "gradientMode": "none",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "insertNulls": false,
+            "lineInterpolation": "linear",
+            "lineWidth": 1,
+            "pointSize": 5,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "auto",
+            "showValues": true,
+            "spanNulls": false,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": 0
+              },
+              {
+                "color": "red",
+                "value": 80
+              }
+            ]
+          },
+          "unit": "none"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 9,
+        "w": 12,
+        "x": 0,
+        "y": 16
+      },
+      "id": 5,
+      "options": {
+        "legend": {
+          "calcs": [],
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "stacking": {
+          "group": "A",
+          "mode": "normal"
+        },
+        "tooltip": {
+          "hideZeros": false,
+          "mode": "multi",
+          "sort": "none"
+        }
+      },
+      "pluginVersion": "12.4.0",
+      "targets": [
+        {
+          "format": "time_series",
+          "group": [],
+          "metricColumn": "metric",
+          "rawSql": "SELECT\n  $__timeGroupAlias(scan_timestamp, '30m'),\n  status AS metric,\n  count(DISTINCT destination_ip)::double precision AS value\nFROM scanned_ips\nWHERE $__timeFilter(scan_timestamp)\n  AND destination_ip IS NOT NULL\nGROUP BY 1, 2\nORDER BY 1, 2;",
+          "refId": "A",
+          "select": [],
+          "timeColumn": "time"
+        }
+      ],
+      "title": "Active vs Inactive IPs (Stacked)",
+      "type": "timeseries"
+    },
+    {
+      "datasource": "grafana-postgresql-datasource",
+      "description": "Active distinct IPs / total distinct IPs per 30-minute bucket (scanned_ips).",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisBorderShow": false,
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "barWidthFactor": 0.6,
+            "drawStyle": "line",
+            "fillOpacity": 0,
+            "gradientMode": "none",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "insertNulls": false,
+            "lineInterpolation": "linear",
+            "lineWidth": 1,
+            "pointSize": 5,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "auto",
+            "showValues": true,
+            "spanNulls": false,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": 0
+              },
+              {
+                "color": "red",
+                "value": 80
+              }
+            ]
+          },
+          "unit": "percent"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 9,
+        "w": 12,
+        "x": 12,
+        "y": 16
+      },
+      "id": 6,
+      "options": {
+        "legend": {
+          "calcs": [],
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "hideZeros": false,
+          "mode": "single",
+          "sort": "none"
+        }
+      },
+      "pluginVersion": "12.4.0",
+      "targets": [
+        {
+          "format": "time_series",
+          "group": [],
+          "metricColumn": "none",
+          "rawSql": "WITH bucketed AS (\n  SELECT\n    $__timeGroup(scan_timestamp, '30m') AS bucket,\n    count(DISTINCT destination_ip) AS total_ips,\n    count(DISTINCT CASE WHEN status='active' THEN destination_ip END) AS active_ips\n  FROM scanned_ips\n  WHERE $__timeFilter(scan_timestamp)\n    AND destination_ip IS NOT NULL\n  GROUP BY 1\n)\nSELECT\n  bucket AS time,\n  (active_ips::double precision / NULLIF(total_ips,0)) * 100.0 AS value\nFROM bucketed\nORDER BY 1;",
+          "refId": "A",
+          "select": [],
+          "timeColumn": "time"
+        }
+      ],
+      "title": "Active IP Ratio (%)",
+      "type": "timeseries"
+    },
+    {
+      "datasource": "grafana-postgresql-datasource",
+      "description": "Mean/median/std/min/max of unique destination IPs per 6-hour snapshot (ip_list).",
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "align": "auto",
+            "cellOptions": {
+              "type": "auto"
+            },
+            "footer": {
+              "reducers": []
+            },
+            "inspect": false
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": 0
+              },
+              {
+                "color": "red",
+                "value": 80
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 7,
+        "w": 8,
+        "x": 0,
+        "y": 25
+      },
+      "id": 7,
+      "options": {
+        "cellHeight": "sm",
+        "showHeader": true
+      },
+      "pluginVersion": "12.4.0",
+      "targets": [
+        {
+          "format": "table",
+          "rawSql": "WITH snapshot_counts AS (\n  SELECT\n    date_trunc('hour', timestamp)\n      - (extract(hour from timestamp)::int % 6) * interval '1 hour'\n      AS snapshot,\n    count(DISTINCT destination_ip) AS unique_ips\n  FROM ip_list\n  WHERE destination_ip IS NOT NULL\n  GROUP BY 1\n)\nSELECT\n  avg(unique_ips) AS mean,\n  percentile_cont(0.5) WITHIN GROUP (ORDER BY unique_ips) AS median,\n  stddev(unique_ips) AS std_dev,\n  min(unique_ips) AS min,\n  max(unique_ips) AS max\nFROM snapshot_counts;",
+          "refId": "A",
+          "timeColumn": "time"
+        }
+      ],
+      "title": "Unique IPs per 6-Hour Snapshot — Summary Stats",
+      "type": "table"
+    },
+    {
+      "datasource": "grafana-postgresql-datasource",
+      "description": "Mean/median/std/min/max of active destination IPs per 6-hour snapshot (scanned_ips).",
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "align": "auto",
+            "cellOptions": {
+              "type": "auto"
+            },
+            "footer": {
+              "reducers": []
+            },
+            "inspect": false
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": 0
+              },
+              {
+                "color": "red",
+                "value": 80
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 7,
+        "w": 9,
+        "x": 8,
+        "y": 25
+      },
+      "id": 8,
+      "options": {
+        "cellHeight": "sm",
+        "showHeader": true
+      },
+      "pluginVersion": "12.4.0",
+      "targets": [
+        {
+          "format": "table",
+          "rawSql": "WITH snapshot_counts AS (\n  SELECT\n    date_trunc('hour', scan_timestamp)\n      - (extract(hour from scan_timestamp)::int % 6) * interval '1 hour'\n      AS snapshot,\n    count(DISTINCT destination_ip) AS active_ips\n  FROM scanned_ips\n  WHERE status='active'\n    AND destination_ip IS NOT NULL\n  GROUP BY 1\n)\nSELECT\n  avg(active_ips) AS mean,\n  percentile_cont(0.5) WITHIN GROUP (ORDER BY active_ips) AS median,\n  stddev(active_ips) AS std_dev,\n  min(active_ips) AS min,\n  max(active_ips) AS max\nFROM snapshot_counts;",
+          "refId": "A",
+          "timeColumn": "time"
+        }
+      ],
+      "title": "Unique Active IPs per 6-Hour Snapshot — Summary Stats",
+      "type": "table"
+    },
+    {
+      "datasource": "grafana-postgresql-datasource",
+      "description": "Mean/median active ratio across 6-hour snapshots (distinct IPs).",
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "align": "auto",
+            "cellOptions": {
+              "type": "auto"
+            },
+            "footer": {
+              "reducers": []
+            },
+            "inspect": false
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": 0
+              },
+              {
+                "color": "red",
+                "value": 80
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 7,
+        "w": 7,
+        "x": 17,
+        "y": 25
+      },
+      "id": 9,
+      "options": {
+        "cellHeight": "sm",
+        "showHeader": true
+      },
+      "pluginVersion": "12.4.0",
+      "targets": [
+        {
+          "format": "table",
+          "rawSql": "WITH snapshot AS (\n  SELECT\n    date_trunc('hour', scan_timestamp)\n      - (extract(hour from scan_timestamp)::int % 6) * interval '1 hour'\n      AS snap,\n    count(DISTINCT destination_ip) AS total,\n    count(DISTINCT CASE WHEN status='active' THEN destination_ip END) AS active\n  FROM scanned_ips\n  WHERE destination_ip IS NOT NULL\n  GROUP BY 1\n)\nSELECT\n  avg(active::double precision / NULLIF(total,0) * 100.0) AS mean_ratio,\n  percentile_cont(0.5)\n    WITHIN GROUP (ORDER BY active::double precision / NULLIF(total,0))\n    * 100.0 AS median_ratio\nFROM snapshot;",
+          "refId": "A",
+          "timeColumn": "time"
+        }
+      ],
+      "title": "Active IP Ratio per 6-Hour Snapshot — Summary Stats",
+      "type": "table"
+    }
+  ],
+  "preload": false,
+  "refresh": "30s",
+  "schemaVersion": 42,
+  "tags": [
+    "connector",
+    "timeseries",
+    "network-measurement"
+  ],
+  "templating": {
+    "list": []
+  },
+  "time": {
+    "from": "now-6h",
+    "to": "now"
+  },
+  "timepicker": {
+    "refresh_intervals": [
+      "5s",
+      "10s",
+      "30s",
+      "1m",
+      "5m",
+      "15m",
+      "30m",
+      "1h"
+    ]
+  },
+  "timezone": "browser",
+  "title": "DaeConn",
+  "uid": "daeconn",
+  "version": 16,
+  "weekStart": ""
+}

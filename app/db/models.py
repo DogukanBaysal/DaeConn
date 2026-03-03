@@ -80,3 +80,4 @@ class ScannedIp(Base):
         Index("idx_scanned_ips_status", "status"),
         Index("idx_scanned_ips_scan_timestamp", "scan_timestamp"),
     )
+
