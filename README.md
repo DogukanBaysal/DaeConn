@@ -1,4 +1,4 @@
-# Connector-Based Passive Data Gathering Setup
+# DaeConn: A Measurement Tool for Bitcoin-Derived P2P Networks
 
 This setup assumes an Ubuntu-based operating system.  
 The experiment requires  
@@ -27,8 +27,8 @@ sudo apt install screen
 Clone the repository and enter the project directory:
 
 ```bash
-git clone https://github.com/DogukanBaysal/Bitcoin-Fork-Connector
-cd Bitcoin-Fork-Connector
+git clone https://github.com/DogukanBaysal/DaeConn
+cd DaeConn
 ```
 
 The entry point for executing the connector is the script `prepare-experiment.sh`,  
